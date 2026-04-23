@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 360" role="img" aria-labelledby="title desc">
+  <title id="title">Mapa umístění prodejny v Prostějově</title>
+  <desc id="desc">Statický náhled mapy s vyznačením ulice Hliníky, přibližně 20 metrů od ulice Plumlovská v Prostějově.</desc>
+  <defs>
+    <linearGradient id="water" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#eaf6ff" />
+      <stop offset="1" stop-color="#cde8ff" />
+    </linearGradient>
+    <linearGradient id="land" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#f8fcff" />
+      <stop offset="1" stop-color="#e4f0ff" />
+    </linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="10" stdDeviation="10" flood-color="#0d4cb8" flood-opacity=".28" />
+    </filter>
+  </defs>
+  <rect width="520" height="360" rx="36" fill="url(#land)" />
+  <path d="M-24 286c86-36 148-31 224-2 94 36 168 31 344-48v124H-24Z" fill="url(#water)" opacity=".85" />
+  <path d="M45 68c72 26 139 41 201 20 58-20 107-23 171 5" fill="none" stroke="#cfdded" stroke-width="52" stroke-linecap="round" />
+  <path d="M45 68c72 26 139 41 201 20 58-20 107-23 171 5" fill="none" stroke="#fff" stroke-width="36" stroke-linecap="round" />
+  <path d="M28 218c82-36 132-72 187-134 44-49 79-63 143-66" fill="none" stroke="#d7e4f3" stroke-width="40" stroke-linecap="round" />
+  <path d="M28 218c82-36 132-72 187-134 44-49 79-63 143-66" fill="none" stroke="#fff" stroke-width="24" stroke-linecap="round" />
+  <path d="M104 344c31-82 68-143 112-184 54-50 104-75 175-84" fill="none" stroke="#cfdded" stroke-width="30" stroke-linecap="round" />
+  <path d="M104 344c31-82 68-143 112-184 54-50 104-75 175-84" fill="none" stroke="#fff" stroke-width="16" stroke-linecap="round" />
+  <path d="M370-18c-26 68-37 118-34 178 2 50-10 91-42 139" fill="none" stroke="#d6e3f2" stroke-width="34" stroke-linecap="round" />
+  <path d="M370-18c-26 68-37 118-34 178 2 50-10 91-42 139" fill="none" stroke="#fff" stroke-width="20" stroke-linecap="round" />
+  <path d="M65 66c68 23 126 32 180 14 63-21 115-18 174 9" fill="none" stroke="#7ca8de" stroke-width="4" stroke-linecap="round" stroke-dasharray="11 12" opacity=".8" />
+  <path d="M35 216c74-33 126-70 178-131 45-52 86-66 151-69" fill="none" stroke="#8ab8e8" stroke-width="4" stroke-linecap="round" stroke-dasharray="10 12" opacity=".7" />
+  <path d="M246 38h98v56h-98zM384 118h84v70h-84zM52 102h92v76H52zM156 218h102v74H156zM342 232h94v64h-94z" fill="#d8eafc" opacity=".72" />
+  <text x="74" y="91" fill="#6c7f9b" font-family="Plus Jakarta Sans, Arial, sans-serif" font-size="18" font-weight="700" transform="rotate(17 74 91)">Plumlovská</text>
+  <text x="239" y="150" fill="#446fa6" font-family="Plus Jakarta Sans, Arial, sans-serif" font-size="19" font-weight="800" transform="rotate(-42 239 150)">Hliníky</text>
+  <text x="312" y="332" fill="#7890ad" font-family="Plus Jakarta Sans, Arial, sans-serif" font-size="18" font-weight="700">Prostějov</text>
+  <g filter="url(#shadow)">
+    <path d="M270 93c-39 0-70 31-70 70 0 51 70 126 70 126s70-75 70-126c0-39-31-70-70-70Z" fill="#0d68df" />
+    <circle cx="270" cy="162" r="28" fill="#fff" />
+    <circle cx="270" cy="162" r="11" fill="#0d68df" />
+  </g>
+  <rect x="28" y="286" width="184" height="42" rx="21" fill="#fff" opacity=".92" />
+  <text x="50" y="313" fill="#143169" font-family="Plus Jakarta Sans, Arial, sans-serif" font-size="17" font-weight="800">49.4727, 17.1058</text>
+</svg>
