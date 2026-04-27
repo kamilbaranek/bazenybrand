@@ -87,6 +87,25 @@ function safe_mail_header(string $value): string
   return trim(str_replace(["\r", "\n"], '', $value));
 }
 
+function log_form_security_event(string $event, array $context = []): void
+{
+  $pairs = [];
+
+  foreach ($context as $key => $value) {
+    if (is_array($value)) {
+      $value = implode(',', array_map('strval', $value));
+    }
+
+    if ($value === '' || $value === null) {
+      continue;
+    }
+
+    $pairs[] = $key . '=' . safe_mail_header((string) $value);
+  }
+
+  error_log('[contact-form] ' . $event . ($pairs !== [] ? ' ' . implode(' ', $pairs) : ''));
+}
+
 function encode_mail_subject(string $subject): string
 {
   if (function_exists('mb_encode_mimeheader')) {
@@ -152,6 +171,11 @@ function verify_recaptcha(string $token, array $config): array
   $result = is_string($response) ? json_decode($response, true) : null;
 
   if (!is_array($result) || empty($result['success'])) {
+    log_form_security_event('recaptcha_verification_failed', [
+      'error_codes' => $result['error-codes'] ?? [],
+      'ip' => $_SERVER['REMOTE_ADDR'] ?? '',
+    ]);
+
     return [
       'ok' => false,
       'message' => 'Ověření proti spamu selhalo. Zkuste to prosím znovu.',
@@ -162,6 +186,13 @@ function verify_recaptcha(string $token, array $config): array
   $action = (string) ($result['action'] ?? '');
 
   if ($action !== 'contact' || $score < (float) $config['recaptcha_min_score']) {
+    log_form_security_event('recaptcha_rejected', [
+      'action' => $action,
+      'score' => $score,
+      'errors' => $result['error-codes'] ?? [],
+      'ip' => $_SERVER['REMOTE_ADDR'] ?? '',
+    ]);
+
     return [
       'ok' => false,
       'message' => 'Odeslání bylo vyhodnoceno jako podezřelé. Zkuste to prosím později.',

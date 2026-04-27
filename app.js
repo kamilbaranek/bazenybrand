@@ -96,6 +96,52 @@ let lastScrollY = window.scrollY;
 let activeGalleryIndex = 0;
 let lastFocusedElement = null;
 let recaptchaSubmitInProgress = false;
+let recaptchaStatusElement = null;
+
+const recaptchaErrorMessage =
+  "Nepodařilo se ověřit ochranu proti spamu. Obnovte stránku a zkuste to znovu.";
+
+const ensureRecaptchaStatus = () => {
+  if (!contactForm) {
+    return null;
+  }
+
+  if (recaptchaStatusElement instanceof HTMLElement && recaptchaStatusElement.isConnected) {
+    return recaptchaStatusElement;
+  }
+
+  const status = document.createElement("p");
+  status.className = "form-status form-status--error";
+  status.dataset.recaptchaStatus = "true";
+  status.setAttribute("role", "alert");
+  status.hidden = true;
+  contactForm.before(status);
+  recaptchaStatusElement = status;
+
+  return status;
+};
+
+const clearRecaptchaStatus = () => {
+  const status = ensureRecaptchaStatus();
+
+  if (!status) {
+    return;
+  }
+
+  status.hidden = true;
+  status.textContent = "";
+};
+
+const showRecaptchaStatus = (message = recaptchaErrorMessage) => {
+  const status = ensureRecaptchaStatus();
+
+  if (!status) {
+    return;
+  }
+
+  status.textContent = message;
+  status.hidden = false;
+};
 
 const closeMenu = () => {
   if (!header || !menuToggle) {
@@ -218,23 +264,34 @@ if (contactForm && recaptchaTokenInput) {
   contactForm.addEventListener("submit", (event) => {
     const siteKey = window.contactFormConfig?.recaptchaSiteKey;
 
-    if (recaptchaSubmitInProgress || !siteKey || !window.grecaptcha) {
+    if (recaptchaSubmitInProgress || !siteKey) {
+      return;
+    }
+
+    if (!window.grecaptcha) {
+      event.preventDefault();
+      showRecaptchaStatus();
       return;
     }
 
     event.preventDefault();
+    clearRecaptchaStatus();
 
     window.grecaptcha.ready(() => {
       window.grecaptcha
         .execute(siteKey, { action: "contact" })
         .then((token) => {
+          if (!token) {
+            showRecaptchaStatus();
+            return;
+          }
+
           recaptchaTokenInput.value = token;
           recaptchaSubmitInProgress = true;
           contactForm.submit();
         })
         .catch(() => {
-          recaptchaSubmitInProgress = true;
-          contactForm.submit();
+          showRecaptchaStatus();
         });
     });
   });
