@@ -3,11 +3,28 @@ declare(strict_types=1);
 
 session_start();
 
+function env_config_value(string $key, string $default = ''): string
+{
+  $value = getenv($key);
+
+  if (is_string($value) && $value !== '') {
+    return $value;
+  }
+
+  foreach ([$_ENV[$key] ?? null, $_SERVER[$key] ?? null, $_SERVER['REDIRECT_' . $key] ?? null] as $candidate) {
+    if (is_string($candidate) && $candidate !== '') {
+      return $candidate;
+    }
+  }
+
+  return $default;
+}
+
 $contactConfig = [
-  'to_email' => getenv('CONTACT_TO_EMAIL') ?: 'kamil@agenturavendi.cz',
-  'from_email' => getenv('CONTACT_FROM_EMAIL') ?: 'noreply@bazenybrand.cz',
-  'recaptcha_site_key' => getenv('RECAPTCHA_SITE_KEY') ?: '',
-  'recaptcha_secret_key' => getenv('RECAPTCHA_SECRET_KEY') ?: '',
+  'to_email' => env_config_value('CONTACT_TO_EMAIL', 'kamil@agenturavendi.cz'),
+  'from_email' => env_config_value('CONTACT_FROM_EMAIL', 'noreply@bazenybrand.cz'),
+  'recaptcha_site_key' => env_config_value('RECAPTCHA_SITE_KEY', '6LcBp8wsAAAAACBSogV8kNWnCePtQpKS1LDnGnvM'),
+  'recaptcha_secret_key' => env_config_value('RECAPTCHA_SECRET_KEY'),
   'recaptcha_min_score' => 0.5,
 ];
 
@@ -118,9 +135,15 @@ function encode_mail_subject(string $subject): string
 function verify_recaptcha(string $token, array $config): array
 {
   if ($config['recaptcha_site_key'] === '' || $config['recaptcha_secret_key'] === '') {
+    log_form_security_event('recaptcha_not_configured', [
+      'site_key' => $config['recaptcha_site_key'] === '' ? 'missing' : 'set',
+      'secret_key' => $config['recaptcha_secret_key'] === '' ? 'missing' : 'set',
+      'ip' => $_SERVER['REMOTE_ADDR'] ?? '',
+    ]);
+
     return [
       'ok' => false,
-      'message' => 'Ochrana formuláře zatím není nakonfigurovaná.',
+      'message' => 'Ochrana formuláře není na serveru nakonfigurovaná. Kontaktujte nás prosím telefonicky.',
     ];
   }
 
@@ -300,9 +323,22 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     $contactErrors[] = 'Zprávu se nepodařilo odeslat. Zkuste to prosím později nebo zavolejte.';
   }
 
+  $technicalErrors = [
+    'Ochrana formuláře není na serveru nakonfigurovaná. Kontaktujte nás prosím telefonicky.',
+    'Nepodařilo se ověřit ochranu proti spamu. Zkuste formulář odeslat znovu.',
+    'Ověření proti spamu selhalo. Zkuste to prosím znovu.',
+    'Odeslání bylo vyhodnoceno jako podezřelé. Zkuste to prosím později.',
+    'Zprávu se nepodařilo odeslat. Zkuste to prosím později nebo zavolejte.',
+  ];
+  $contactNoticeMessage = 'Formulář obsahuje chyby. Zkontrolujte prosím zvýrazněné informace.';
+
+  if (count($contactErrors) === 1 && in_array($contactErrors[0], $technicalErrors, true)) {
+    $contactNoticeMessage = 'Formulář se nepodařilo odeslat.';
+  }
+
   $contactNotice = [
     'type' => 'error',
-    'message' => 'Formulář obsahuje chyby. Zkontrolujte prosím zvýrazněné informace.',
+    'message' => $contactNoticeMessage,
   ];
 }
 
