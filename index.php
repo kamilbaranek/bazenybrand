@@ -865,11 +865,11 @@ $recaptchaSiteKey = (string) $contactConfig['recaptcha_site_key'];
                   <span>let zkušeností</span>
                 </div>
                 <div>
-                  <strong>1000+</strong>
+                  <strong>100+</strong>
                   <span>spokojených zákazníků</span>
                 </div>
                 <div>
-                  <strong>5000+</strong>
+                  <strong>500+</strong>
                   <span>produktů skladem</span>
                 </div>
               </div>
