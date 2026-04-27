@@ -946,7 +946,7 @@ $recaptchaSiteKey = (string) $contactConfig['recaptcha_site_key'];
             </article>
 
             <article class="form-card reveal delay-1">
-              <p class="eyebrow">Máte dotaz? Napište nám.</p>
+              <p class="eyebrow">Máte dotaz? Napište mi:</p>
               <h2>Kontaktní formulář</h2>
 
               <?php if ($contactNotice !== null): ?>
