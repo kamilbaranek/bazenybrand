@@ -6,6 +6,52 @@ session_start();
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 
+function load_env_file(string $path): void
+{
+  if (!is_file($path) || !is_readable($path)) {
+    return;
+  }
+
+  $lines = file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+
+  if ($lines === false) {
+    return;
+  }
+
+  foreach ($lines as $line) {
+    $line = trim($line);
+
+    if ($line === '' || $line[0] === '#' || strpos($line, '=') === false) {
+      continue;
+    }
+
+    [$key, $value] = explode('=', $line, 2);
+    $key = trim($key);
+    $value = trim($value);
+
+    if ($key === '' || !preg_match('/^[A-Z0-9_]+$/', $key)) {
+      continue;
+    }
+
+    if (
+      strlen($value) >= 2 &&
+      (($value[0] === '"' && substr($value, -1) === '"') || ($value[0] === "'" && substr($value, -1) === "'"))
+    ) {
+      $value = substr($value, 1, -1);
+    }
+
+    $existingValue = getenv($key);
+
+    if ($existingValue === false || $existingValue === '') {
+      putenv($key . '=' . $value);
+      $_ENV[$key] = $value;
+      $_SERVER[$key] = $value;
+    }
+  }
+}
+
+load_env_file(__DIR__ . '/.env');
+
 function env_config_value(string $key, string $default = ''): string
 {
   $value = getenv($key);
@@ -29,6 +75,11 @@ $contactConfig = [
   'recaptcha_site_key' => env_config_value('RECAPTCHA_SITE_KEY', '6LcBp8wsAAAAACBSogV8kNWnCePtQpKS1LDnGnvM'),
   'recaptcha_secret_key' => env_config_value('RECAPTCHA_SECRET_KEY'),
   'recaptcha_min_score' => 0.5,
+  'smtp_host' => env_config_value('SMTP_HOST'),
+  'smtp_port' => (int) env_config_value('SMTP_PORT', '587'),
+  'smtp_username' => env_config_value('SMTP_USERNAME'),
+  'smtp_password' => env_config_value('SMTP_PASSWORD'),
+  'smtp_encryption' => strtolower(env_config_value('SMTP_ENCRYPTION', 'tls')),
 ];
 
 $localConfigFile = __DIR__ . '/contact-config.local.php';
@@ -133,6 +184,169 @@ function encode_mail_subject(string $subject): string
   }
 
   return '=?UTF-8?B?' . base64_encode($subject) . '?=';
+}
+
+function smtp_read_response($socket): array
+{
+  $response = '';
+  $code = 0;
+
+  while (($line = fgets($socket, 515)) !== false) {
+    $response .= $line;
+
+    if (preg_match('/^(\d{3})(\s|-)/', $line, $matches)) {
+      $code = (int) $matches[1];
+
+      if ($matches[2] === ' ') {
+        break;
+      }
+    }
+  }
+
+  return [$code, trim($response)];
+}
+
+function smtp_expect($socket, array $expectedCodes, string $step): bool
+{
+  [$code, $response] = smtp_read_response($socket);
+
+  if (!in_array($code, $expectedCodes, true)) {
+    log_form_security_event('smtp_failed', [
+      'step' => $step,
+      'code' => $code,
+      'response' => $response,
+    ]);
+
+    return false;
+  }
+
+  return true;
+}
+
+function smtp_write_command($socket, string $command, array $expectedCodes, string $step): bool
+{
+  if (fwrite($socket, $command . "\r\n") === false) {
+    log_form_security_event('smtp_write_failed', [
+      'step' => $step,
+    ]);
+
+    return false;
+  }
+
+  return smtp_expect($socket, $expectedCodes, $step);
+}
+
+function smtp_send_data($socket, string $data): bool
+{
+  $normalized = str_replace(["\r\n", "\r"], "\n", $data);
+  $lines = explode("\n", $normalized);
+
+  foreach ($lines as $index => $line) {
+    if ($line !== '' && $line[0] === '.') {
+      $lines[$index] = '.' . $line;
+    }
+  }
+
+  if (fwrite($socket, implode("\r\n", $lines) . "\r\n.\r\n") === false) {
+    log_form_security_event('smtp_write_failed', [
+      'step' => 'data_body',
+    ]);
+
+    return false;
+  }
+
+  return smtp_expect($socket, [250], 'data_body');
+}
+
+function send_smtp_email(string $toEmail, string $fromEmail, string $subject, array $headers, string $body, array $config): bool
+{
+  $host = safe_mail_header((string) ($config['smtp_host'] ?? ''));
+  $port = (int) ($config['smtp_port'] ?? 587);
+  $username = (string) ($config['smtp_username'] ?? '');
+  $password = (string) ($config['smtp_password'] ?? '');
+  $encryption = strtolower((string) ($config['smtp_encryption'] ?? 'tls'));
+
+  if ($host === '') {
+    return false;
+  }
+
+  $remote = $encryption === 'ssl' ? 'ssl://' . $host . ':' . $port : $host . ':' . $port;
+  $socket = @stream_socket_client($remote, $errno, $error, 15, STREAM_CLIENT_CONNECT);
+
+  if (!is_resource($socket)) {
+    log_form_security_event('smtp_connect_failed', [
+      'host' => $host,
+      'port' => $port,
+      'error' => $error,
+      'errno' => $errno,
+    ]);
+
+    return false;
+  }
+
+  stream_set_timeout($socket, 15);
+  $serverName = safe_mail_header($_SERVER['HTTP_HOST'] ?? 'localhost');
+
+  if (
+    !smtp_expect($socket, [220], 'connect') ||
+    !smtp_write_command($socket, 'EHLO ' . $serverName, [250], 'ehlo')
+  ) {
+    fclose($socket);
+    return false;
+  }
+
+  if ($encryption === 'tls') {
+    if (!smtp_write_command($socket, 'STARTTLS', [220], 'starttls')) {
+      fclose($socket);
+      return false;
+    }
+
+    if (!stream_socket_enable_crypto($socket, true, STREAM_CRYPTO_METHOD_TLS_CLIENT)) {
+      log_form_security_event('smtp_tls_failed', [
+        'host' => $host,
+      ]);
+      fclose($socket);
+      return false;
+    }
+
+    if (!smtp_write_command($socket, 'EHLO ' . $serverName, [250], 'ehlo_tls')) {
+      fclose($socket);
+      return false;
+    }
+  }
+
+  if ($username !== '') {
+    if (
+      !smtp_write_command($socket, 'AUTH LOGIN', [334], 'auth') ||
+      !smtp_write_command($socket, base64_encode($username), [334], 'auth_username') ||
+      !smtp_write_command($socket, base64_encode($password), [235], 'auth_password')
+    ) {
+      fclose($socket);
+      return false;
+    }
+  }
+
+  $messageHeaders = array_merge([
+    'To: ' . $toEmail,
+    'Subject: ' . encode_mail_subject($subject),
+    'Date: ' . date(DATE_RFC2822),
+  ], $headers);
+  $message = implode("\r\n", $messageHeaders) . "\r\n\r\n" . $body;
+
+  if (
+    !smtp_write_command($socket, 'MAIL FROM:<' . $fromEmail . '>', [250], 'mail_from') ||
+    !smtp_write_command($socket, 'RCPT TO:<' . $toEmail . '>', [250, 251], 'rcpt_to') ||
+    !smtp_write_command($socket, 'DATA', [354], 'data') ||
+    !smtp_send_data($socket, $message)
+  ) {
+    fclose($socket);
+    return false;
+  }
+
+  smtp_write_command($socket, 'QUIT', [221], 'quit');
+  fclose($socket);
+
+  return true;
 }
 
 function verify_recaptcha(string $token, array $config): array
@@ -261,7 +475,20 @@ function send_contact_email(array $values, array $config): bool
     'X-Mailer: PHP/' . phpversion(),
   ];
 
-  return mail($toEmail, encode_mail_subject($subject), $body, implode("\r\n", $headers));
+  if ((string) ($config['smtp_host'] ?? '') !== '') {
+    return send_smtp_email($toEmail, $fromEmail, $subject, $headers, $body, $config);
+  }
+
+  $sent = mail($toEmail, encode_mail_subject($subject), $body, implode("\r\n", $headers));
+
+  if (!$sent) {
+    log_form_security_event('mail_function_failed', [
+      'to' => $toEmail,
+      'from' => $fromEmail,
+    ]);
+  }
+
+  return $sent;
 }
 
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
