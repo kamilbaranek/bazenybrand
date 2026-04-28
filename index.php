@@ -3,6 +3,9 @@ declare(strict_types=1);
 
 session_start();
 
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+
 function env_config_value(string $key, string $default = ''): string
 {
   $value = getenv($key);
@@ -274,7 +277,9 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
   $recaptchaToken = read_post_value('recaptcha_token');
 
   if (!hash_equals($_SESSION['contact_csrf'], $csrfToken)) {
-    $contactErrors[] = 'Platnost formuláře vypršela. Obnovte stránku a zkuste odeslání znovu.';
+    log_form_security_event('csrf_mismatch', [
+      'ip' => $_SERVER['REMOTE_ADDR'] ?? '',
+    ]);
   }
 
   if ($honeypot !== '') {
